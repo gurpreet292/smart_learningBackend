@@ -1,0 +1,136 @@
+const { YoutubeTranscript } = require('youtube-transcript');
+
+class TranscriptService {
+  /**
+   * Extract video ID from YouTube URL
+   */
+  static extractVideoId(url) {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+      /youtube\.com\/watch\?.*v=([^&\n?#]+)/
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+
+    throw new Error('Invalid YouTube URL');
+  }
+
+  /**
+   * Fetch transcript from YouTube video
+   */
+  static async fetchTranscript(videoUrl) {
+    try {
+      const videoId = this.extractVideoId(videoUrl);
+      
+      // Try fetching transcript with different language options
+      let transcriptData;
+      const languageCodes = ['en', 'en-US', 'en-GB', 'a.en', 'en-IN'];
+      
+      for (const lang of languageCodes) {
+        try {
+          transcriptData = await YoutubeTranscript.fetchTranscript(videoId, {
+            lang: lang
+          });
+          if (transcriptData && transcriptData.length > 0) {
+            console.log(`✅ Transcript fetched successfully with language: ${lang}`);
+            break;
+          }
+        } catch (langError) {
+          console.log(`⚠️ Failed to fetch with ${lang}, trying next...`);
+          continue;
+        }
+      }
+      
+      // If no language-specific transcript found, try without language parameter
+      if (!transcriptData || transcriptData.length === 0) {
+        try {
+          transcriptData = await YoutubeTranscript.fetchTranscript(videoId);
+          console.log('✅ Transcript fetched without language parameter');
+        } catch (defaultError) {
+          console.error('❌ All transcript fetch attempts failed');
+        }
+      }
+      
+      if (!transcriptData || transcriptData.length === 0) {
+        throw new Error('No transcript/subtitles available for this video. The video may not have captions enabled or may be restricted.');
+      }
+
+      // Combine transcript segments
+      const rawTranscript = transcriptData.map(item => item.text).join(' ');
+      
+      console.log(`� Transcript length: ${rawTranscript.length} characters`);
+      
+      return {
+        videoId,
+        raw: rawTranscript,
+        segments: transcriptData
+      };
+    } catch (error) {
+      console.error('Transcript fetch error:', error);
+      
+      // Provide more helpful error messages
+      if (error.message.includes('Transcript is disabled')) {
+        throw new Error('Transcripts are disabled for this video by the video owner. Please try a different video with captions enabled.');
+      } else if (error.message.includes('No transcript')) {
+        throw new Error('No captions/subtitles found for this video. Please ensure the video has captions available.');
+      } else if (error.message.includes('Could not retrieve')) {
+        throw new Error('Unable to retrieve transcript. The video may be private, age-restricted, or unavailable.');
+      }
+      
+      throw new Error(`Failed to fetch transcript: ${error.message}`);
+    }
+  }
+
+  /**
+   * Clean and preprocess transcript text
+   */
+  static cleanTranscript(rawTranscript) {
+    let cleaned = rawTranscript;
+
+    // Remove multiple spaces
+    cleaned = cleaned.replace(/\s+/g, ' ');
+
+    // Remove common filler words and repetitions
+    const fillers = ['um', 'uh', 'like', 'you know', 'basically', 'actually', 'literally'];
+    const fillerPattern = new RegExp(`\\b(${fillers.join('|')})\\b`, 'gi');
+    cleaned = cleaned.replace(fillerPattern, '');
+
+    // Remove special characters but keep punctuation
+    cleaned = cleaned.replace(/[^\w\s.,!?'-]/g, '');
+
+    // Fix spacing around punctuation
+    cleaned = cleaned.replace(/\s+([.,!?])/g, '$1');
+    cleaned = cleaned.replace(/([.,!?])(\w)/g, '$1 $2');
+
+    // Remove excessive repetition of words
+    cleaned = cleaned.replace(/\b(\w+)(\s+\1){2,}\b/gi, '$1');
+
+    // Trim and normalize
+    cleaned = cleaned.trim();
+    cleaned = cleaned.replace(/\s+/g, ' ');
+
+    return cleaned;
+  }
+
+  /**
+   * Validate transcript quality
+   */
+  static validateTranscript(transcript) {
+    if (!transcript || transcript.length < 100) {
+      throw new Error('Transcript is too short or empty');
+    }
+
+    if (transcript.length > 500000) {
+      throw new Error('Transcript is too long (max 500,000 characters)');
+    }
+
+    return true;
+  }
+}
+
+module.exports = TranscriptService;
