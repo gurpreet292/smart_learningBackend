@@ -12,9 +12,23 @@ const app = express();
 connectDB();
 
 
-// ✅ SIMPLE & WORKING CORS FOR VERCEL
+// ✅ CORS Configuration - Allow both production and local development
+const allowedOrigins = [
+  "https://smart-learning-frontend-red.vercel.app",
+  "http://localhost:3000"
+];
+
 app.use(cors({
-  origin: "https://smart-learning-frontend-red.vercel.app",
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`Not allowed by CORS: ${origin}`));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true
 }));
