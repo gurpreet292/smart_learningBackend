@@ -16,7 +16,7 @@ connectDB();
 // Middleware
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://video-learning-frontend.vercel.app',
+  'https://smart-learning-frontend-red.vercel.app',
   process.env.CLIENT_URL
 ].filter(Boolean);
 
